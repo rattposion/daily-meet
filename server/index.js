@@ -3,8 +3,14 @@ import session from 'express-session';
 import cors from 'cors';
 import axios from 'axios';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 dotenv.config();
+
+// ESM-friendly __dirname para servir arquivos estáticos do frontend
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const isProd = process.env.NODE_ENV === 'production';
@@ -16,6 +22,9 @@ const CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI;
 const FRONTEND_URL = process.env.FRONTEND_URL || `http://localhost:5173`;
+const FRONTEND_HOST = (() => {
+  try { return new URL(FRONTEND_URL).host; } catch { return null; }
+})();
 
 if (!CLIENT_ID || !CLIENT_SECRET || !REDIRECT_URI) {
   console.error('Faltam variáveis de ambiente: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI');
@@ -23,7 +32,7 @@ if (!CLIENT_ID || !CLIENT_SECRET || !REDIRECT_URI) {
 }
 
 app.use(cors({
-  origin: FRONTEND_URL,
+  origin: FRONTEND_URL || true,
   credentials: true,
 }));
 
@@ -35,7 +44,9 @@ app.use(session({
   cookie: {
     httpOnly: true,
     secure: isProd,
-    sameSite: 'lax',
+    // Para domínios separados (frontend em vi.sycdesk.com e backend em api.sycdesk.com),
+    // precisamos permitir cookies em contexto cross-site.
+    sameSite: isProd ? 'none' : 'lax',
   },
 }));
 
@@ -91,7 +102,8 @@ app.get('/api/auth/google/callback', async (req, res) => {
       expiry_date: Date.now() + (tokens.expires_in ? tokens.expires_in * 1000 : 0),
     };
 
-    const redirect = new URL(FRONTEND_URL);
+    const redirectBase = FRONTEND_URL || `${req.protocol}://${req.get('host')}/`;
+    const redirect = new URL(redirectBase);
     redirect.searchParams.set('auth', 'success');
     return res.redirect(redirect.toString());
   } catch (err) {
@@ -156,6 +168,23 @@ app.post('/api/auth/logout', (req, res) => {
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true });
+});
+
+// Serve o frontend estático (Vite build) APENAS no domínio do FRONTEND_URL
+app.use((req, res, next) => {
+  if (FRONTEND_HOST && req.get('host') === FRONTEND_HOST) {
+    return express.static(path.join(__dirname, '../dist'))(req, res, next);
+  }
+  return next();
+});
+
+// Fallback para SPA: qualquer rota não-API serve index.html APENAS no domínio do FRONTEND_URL
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api/')) return next();
+  if (FRONTEND_HOST && req.get('host') === FRONTEND_HOST) {
+    return res.sendFile(path.join(__dirname, '../dist', 'index.html'));
+  }
+  return res.status(404).json({ error: 'Not Found' });
 });
 
 app.listen(PORT, () => {
