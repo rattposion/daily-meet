@@ -71,3 +71,64 @@ Yes, you can!
 To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+
+## Backend (Node/Express) + Google OAuth
+
+O projeto agora inclui um backend em Node/Express para autenticação segura com Google OAuth e leitura de eventos do Google Calendar.
+
+### Variáveis de ambiente
+
+As seguintes variáveis foram adicionadas ao arquivo `.env`:
+
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `GOOGLE_REDIRECT_URI` (padrão: `http://localhost:4000/api/auth/google/callback`)
+- `SESSION_SECRET`
+- `SERVER_PORT` (padrão: `4000`)
+- `FRONTEND_URL` (padrão: `http://localhost:5173`)
+
+Certifique-se de trocar `SESSION_SECRET` por um valor forte em produção.
+
+### Como rodar localmente
+
+```sh
+# instalar dependências (já feito no setup geral)
+npm install
+
+# iniciar backend
+npm run server
+
+# em outro terminal: iniciar frontend
+npm run dev
+```
+
+- Backend: `http://localhost:4000`
+- Frontend: `http://localhost:5173`
+
+### Fluxo de OAuth
+
+- Inicie o fluxo de login acessando `GET /api/auth/google` (o backend redireciona para a tela de consentimento do Google).
+- Após o consentimento, o Google redireciona para `GET /api/auth/google/callback` e o backend salva os tokens na sessão.
+- Liste eventos via `GET /api/calendar/events` (usa o `access_token` e renova quando necessário com `refresh_token`).
+
+### Endpoints úteis
+
+- `GET /api/health` – healthcheck do backend
+- `GET /api/auth/google` – inicia OAuth (redirect)
+- `GET /api/auth/google/callback` – callback do OAuth
+- `GET /api/calendar/events` – lista eventos do calendário principal
+- `POST /api/auth/logout` – encerra a sessão
+
+### Docker (backend)
+
+Um Dockerfile foi adicionado para o backend.
+
+```sh
+# build da imagem
+docker build -t daily-meet-backend .
+
+# rodar o container (carrega .env)
+docker run --env-file .env -p 4000:4000 daily-meet-backend
+```
+
+Observação: este Dockerfile sobe somente o backend. O frontend continua rodando via Vite ou pode ser containerizado separadamente, se desejar.
