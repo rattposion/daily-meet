@@ -7,11 +7,11 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const app = express();
-+ const isProd = process.env.NODE_ENV === 'production';
-+ // quando atrás de proxy/reverse proxy (Coolify/Traefik), habilitar trust proxy
-+ app.set('trust proxy', 1);
+const isProd = process.env.NODE_ENV === 'production';
+app.set('trust proxy', 1);
 
-const PORT = process.env.SERVER_PORT || 4000;
+// Preferir PORT (padrão de PaaS), depois SERVER_PORT, senão 4000
+const PORT = process.env.PORT || process.env.SERVER_PORT || 4000;
 const CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI;
@@ -34,8 +34,7 @@ app.use(session({
   saveUninitialized: false,
   cookie: {
     httpOnly: true,
--    secure: false, // ajuste para true se usar HTTPS
-+    secure: isProd, // true em produção
+    secure: isProd,
     sameSite: 'lax',
   },
 }));
@@ -44,7 +43,6 @@ function generateState() {
   return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
 }
 
-// Inicia OAuth: redireciona para Google Consent Screen
 app.get('/api/auth/google', (req, res) => {
   const scope = [
     'https://www.googleapis.com/auth/calendar.readonly',
@@ -58,21 +56,17 @@ app.get('/api/auth/google', (req, res) => {
   authUrl.searchParams.set('redirect_uri', REDIRECT_URI);
   authUrl.searchParams.set('response_type', 'code');
   authUrl.searchParams.set('scope', scope);
-  authUrl.searchParams.set('access_type', 'offline'); // para receber refresh_token
-  authUrl.searchParams.set('prompt', 'consent'); // garante refresh_token
+  authUrl.searchParams.set('access_type', 'offline');
+  authUrl.searchParams.set('prompt', 'consent');
   authUrl.searchParams.set('include_granted_scopes', 'true');
   authUrl.searchParams.set('state', state);
-
   return res.redirect(authUrl.toString());
 });
 
-// Callback que troca o "code" por tokens
 app.get('/api/auth/google/callback', async (req, res) => {
   try {
     const { code, state } = req.query;
     if (!code) return res.status(400).send('Code inválido');
-
-    // valida state
     if (!state || state !== req.session.state) {
       return res.status(400).send('State inválido');
     }
@@ -90,15 +84,13 @@ app.get('/api/auth/google/callback', async (req, res) => {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     });
 
-    const tokens = tokenRes.data; // { access_token, expires_in, refresh_token, token_type, scope }
-
+    const tokens = tokenRes.data;
     req.session.tokens = {
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token,
       expiry_date: Date.now() + (tokens.expires_in ? tokens.expires_in * 1000 : 0),
     };
 
-    // Redireciona para o frontend com sucesso
     const redirect = new URL(FRONTEND_URL);
     redirect.searchParams.set('auth', 'success');
     return res.redirect(redirect.toString());
@@ -111,14 +103,10 @@ app.get('/api/auth/google/callback', async (req, res) => {
 async function ensureAccessToken(sessionData) {
   if (!sessionData?.tokens) return null;
   const { access_token, refresh_token, expiry_date } = sessionData.tokens;
-
   if (access_token && expiry_date && Date.now() < expiry_date - 30_000) {
-    return access_token; // ainda válido
+    return access_token;
   }
-
   if (!refresh_token) return null;
-
-  // refresh do token
   const params = new URLSearchParams({
     client_id: CLIENT_ID,
     client_secret: CLIENT_SECRET,
@@ -129,7 +117,7 @@ async function ensureAccessToken(sessionData) {
     const resp = await axios.post('https://oauth2.googleapis.com/token', params.toString(), {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     });
-    const data = resp.data; // { access_token, expires_in }
+    const data = resp.data;
     sessionData.tokens.access_token = data.access_token;
     sessionData.tokens.expiry_date = Date.now() + (data.expires_in ? data.expires_in * 1000 : 0);
     return data.access_token;
@@ -139,24 +127,20 @@ async function ensureAccessToken(sessionData) {
   }
 }
 
-// API para listar eventos do calendário
 app.get('/api/calendar/events', async (req, res) => {
   try {
     const accessToken = await ensureAccessToken(req.session);
     if (!accessToken) return res.status(401).json({ error: 'Não autenticado' });
-
     const params = {
       maxResults: 10,
       orderBy: 'startTime',
       singleEvents: true,
       timeMin: new Date().toISOString(),
     };
-
     const response = await axios.get('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
       headers: { Authorization: `Bearer ${accessToken}` },
       params,
     });
-
     return res.json(response.data);
   } catch (error) {
     console.error('Erro ao buscar eventos:', error.response?.data || error.message);
