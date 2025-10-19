@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { CalendarAuth } from "@/components/CalendarAuth";
 import { EventCard } from "@/components/EventCard";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar, Loader2 } from "lucide-react";
+import { Calendar, Loader2, Bell } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface CalendarEvent {
   id: string;
@@ -17,10 +18,12 @@ interface CalendarEvent {
 const Index = () => {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [previousEventIds, setPreviousEventIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
+  const [isMonitoring, setIsMonitoring] = useState(false);
   const { toast } = useToast();
 
-  const fetchEvents = async (token: string) => {
+  const fetchEvents = async (token: string, showToast = true) => {
     setIsLoading(true);
     try {
       const response = await fetch(
@@ -41,12 +44,43 @@ const Index = () => {
       if (!response.ok) throw new Error("Failed to fetch events");
 
       const data = await response.json();
-      setEvents(data.items || []);
+      const newEvents = data.items || [];
       
-      toast({
-        title: "Eventos carregados!",
-        description: `${data.items?.length || 0} agendamentos encontrados.`,
-      });
+      // Detectar novos eventos
+      if (previousEventIds.size > 0) {
+        const newEventsList = newEvents.filter(
+          (event: CalendarEvent) => !previousEventIds.has(event.id)
+        );
+        
+        if (newEventsList.length > 0) {
+          newEventsList.forEach((event: CalendarEvent) => {
+            toast({
+              title: "🔔 Novo Agendamento!",
+              description: (
+                <div className="space-y-1">
+                  <p className="font-semibold">{event.summary}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {event.start.dateTime 
+                      ? new Date(event.start.dateTime).toLocaleString('pt-BR')
+                      : new Date(event.start.date!).toLocaleDateString('pt-BR')}
+                  </p>
+                </div>
+              ),
+              duration: 5000,
+            });
+          });
+        }
+      }
+      
+      setEvents(newEvents);
+      setPreviousEventIds(new Set(newEvents.map((e: CalendarEvent) => e.id)));
+      
+      if (showToast) {
+        toast({
+          title: "Eventos carregados!",
+          description: `${newEvents.length || 0} agendamentos encontrados.`,
+        });
+      }
     } catch (error) {
       console.error("Error fetching events:", error);
       toast({
@@ -67,11 +101,34 @@ const Index = () => {
   const handleSignOut = () => {
     setAccessToken(null);
     setEvents([]);
+    setPreviousEventIds(new Set());
+    setIsMonitoring(false);
     toast({
       title: "Desconectado",
       description: "Você foi desconectado do Google Calendar.",
     });
   };
+
+  const toggleMonitoring = () => {
+    setIsMonitoring(!isMonitoring);
+    toast({
+      title: !isMonitoring ? "Monitoramento ativado" : "Monitoramento desativado",
+      description: !isMonitoring 
+        ? "Você será notificado sobre novos agendamentos a cada 30 segundos." 
+        : "Notificações automáticas desativadas.",
+    });
+  };
+
+  // Monitoramento automático de novos eventos
+  useEffect(() => {
+    if (!accessToken || !isMonitoring) return;
+
+    const interval = setInterval(() => {
+      fetchEvents(accessToken, false);
+    }, 30000); // Verificar a cada 30 segundos
+
+    return () => clearInterval(interval);
+  }, [accessToken, isMonitoring]);
 
   useEffect(() => {
     // Load Google API script
@@ -106,11 +163,23 @@ const Index = () => {
               </div>
             </div>
             
-            <CalendarAuth
+            <div className="flex items-center gap-3">
+              {accessToken && (
+                <Button
+                  onClick={toggleMonitoring}
+                  variant={isMonitoring ? "default" : "outline"}
+                  className={isMonitoring ? "bg-gradient-to-r from-primary to-accent" : ""}
+                >
+                  <Bell className={`mr-2 h-4 w-4 ${isMonitoring ? 'animate-pulse' : ''}`} />
+                  {isMonitoring ? "Monitorando" : "Ativar Alertas"}
+                </Button>
+              )}
+              <CalendarAuth
               onSignIn={handleSignIn}
               isSignedIn={!!accessToken}
-              onSignOut={handleSignOut}
-            />
+                onSignOut={handleSignOut}
+              />
+            </div>
           </div>
         </div>
       </header>
