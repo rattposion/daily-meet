@@ -27,7 +27,7 @@ export const CalendarAuth = ({ onSignIn, isSignedIn, onSignOut }: CalendarAuthPr
     setIsLoading(true);
     try {
       // Initialize Google OAuth
-      const CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID"; // User needs to configure this
+      const CLIENT_ID = "953559136801-ug8dhkvevknm49mbngl3kn9v2g87ij5s.apps.googleusercontent.com";
       const SCOPES = "https://www.googleapis.com/auth/calendar.readonly";
       
       if (!window.google) {

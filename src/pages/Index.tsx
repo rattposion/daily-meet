@@ -233,25 +233,23 @@ const Index = () => {
       {!accessToken && (
         <div className="container mx-auto px-4 pb-12">
           <div className="max-w-2xl mx-auto bg-card/50 backdrop-blur-sm rounded-xl p-6 border border-border/50">
-            <h3 className="font-semibold text-lg mb-4">Configuração Necessária</h3>
+            <h3 className="font-semibold text-lg mb-4">Como usar</h3>
             <div className="space-y-3 text-sm text-muted-foreground">
-              <p>Para usar esta aplicação, você precisa:</p>
+              <p>O sistema está configurado e pronto para uso!</p>
               <ol className="list-decimal list-inside space-y-2 ml-2">
-                <li>Criar um projeto no Google Cloud Console</li>
-                <li>Ativar a API do Google Calendar</li>
-                <li>Criar credenciais OAuth 2.0</li>
-                <li>Adicionar o Client ID no arquivo CalendarAuth.tsx</li>
+                <li>Clique no botão "Conectar ao Google Calendar"</li>
+                <li>Faça login com sua conta Google</li>
+                <li>Autorize o acesso ao seu calendário</li>
+                <li>Seus eventos serão carregados automaticamente</li>
+                <li>Ative os alertas para ser notificado sobre novos agendamentos</li>
               </ol>
-              <p className="pt-2">
-                <a 
-                  href="https://console.cloud.google.com/" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline"
-                >
-                  Acessar Google Cloud Console →
-                </a>
-              </p>
+              <div className="mt-4 p-3 bg-primary/10 rounded-lg border border-primary/20">
+                <p className="text-primary font-medium">💡 Dica de Segurança</p>
+                <p className="text-xs mt-1">
+                  A chave secreta do cliente (Client Secret) não é usada no frontend por segurança.
+                  Apenas o Client ID é necessário para autenticação OAuth no navegador.
+                </p>
+              </div>
             </div>
           </div>
         </div>
